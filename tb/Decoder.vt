@@ -1,0 +1,100 @@
+`timescale 1 ps/ 1 ps
+module Decoder_tst();
+
+	reg [63:0] axi_data;
+	reg axi_last;
+	reg axi_valid;
+	reg clk;
+	reg hdm_ready;
+	reg [7:0] keep;
+	reg rst_n;
+
+	wire clac_start;
+	wire dc_ready;
+	wire flash;
+	wire last_ele;
+	wire mismatch;
+	wire [31:0] task_id;
+	wire [63:0] tile_data;
+	wire [31:0] tile_id;
+	wire tile_valid;
+
+	//data
+	reg [63:0] tst_data [68:0];
+	reg [71:0] valid;
+	reg [71:0] last;
+	//testbench signal
+	reg [7:0] dat_cnt;
+	reg [7:0] all_cnt;
+	
+	Decoder i1 (
+		.axi_data(axi_data),
+		.axi_last(axi_last),
+		.axi_valid(axi_valid),
+		.clac_start(clac_start),
+		.clk(clk),
+		.dc_ready(dc_ready),
+		.flash(flash),
+		.hdm_ready(hdm_ready),
+		.keep(keep),
+		.last_ele(last_ele),
+		.mismatch(mismatch),
+		.rst_n(rst_n),
+		.task_id(task_id),
+		.tile_data(tile_data),
+		.tile_id(tile_id),
+		.tile_valid(tile_valid)
+	);
+
+	integer i;
+	initial begin
+		tst_data[0] = 64'h0000_0005_0000_0001;//包1帧头
+		tst_data[17] = 64'h0000_0004_0000_0000;//包2帧头
+		tst_data[34] = 64'h0000_0003_0000_0001;//包3帧头
+		tst_data[51] = 64'h0000_0003_0000_0001;//包4帧头
+		
+		for (i = 0;i < 68;i = i+1)begin
+			if(i != 0 & i != 17 & i != 34 & i != 51)
+				tst_data[i] = tst_data[i-1] + 64'd1;
+		end
+	end
+	
+	initial begin
+		valid = 72'b1111_1111_1111_1111_1011_1111_1111_1111_1110_1111_1111_1111_1111_1011_1111_1111_1111_1110;
+		last  = 72'b1000_0000_0000_0000_0010_0000_0000_0000_0000_1000_0000_0000_0000_0010_0000_0000_0000_0000;
+		
+		clk = 1'b0;
+		rst_n = 1'b0;
+		
+		axi_data = 64'd0;
+		axi_last = 1'b0;
+		axi_valid = 1'b0;
+		hdm_ready = 1'b1;
+		keep = 8'hff;
+		
+		dat_cnt = 8'd0;
+		all_cnt = 8'd0;
+		
+		#10 rst_n = 1'b1;
+	end            
+
+	always #5 clk = ~clk;
+	
+	always @(posedge clk) begin
+		if(rst_n)begin
+			all_cnt <= all_cnt + 8'd1;
+			axi_valid <= valid[0];
+			valid <= valid >> 1;
+			axi_last <= last[0];
+			last <= last >> 1;
+			if(axi_valid & dc_ready) begin
+				dat_cnt <= dat_cnt + 8'd1;
+			end
+		end
+	end
+
+	always @(*)begin
+		axi_data = (dat_cnt <68)?tst_data[dat_cnt]:64'd0;
+	
+	end
+endmodule
